@@ -1,0 +1,245 @@
+/*
+Covid 19 Data Exploration 
+Skills used: Joins, CTE's, Temp Tables, Windows Functions, Aggregate Functions, Creating Views, Converting Data Types
+*/
+
+SELECT
+  *
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE continent IS NOT NULL
+
+SELECT
+  *
+FROM
+  `portfol-1-378507.Covid.Covid_vaccination`
+WHERE continent IS NOT NULL
+
+
+
+SELECT
+  location,
+  date,
+  total_cases,
+  new_cases,
+  total_deaths,
+  population
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+ORDER BY
+  1,
+  2
+ 
+ 
+  ## Looking at Total Cases vs Total Deaths
+  ## Shows likelihood of dying if you contract covid in your country
+
+
+SELECT
+  location,
+  date,
+  total_cases,
+  total_deaths,
+  (total_deaths/total_cases)*100 AS DeathPercentage
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+ORDER BY
+  1,
+  2
+
+
+  ## Looking at Total Cases vs Total Population
+## Shows what Percentage of population got Covid
+
+
+SELECT
+  location,
+  date,
+  total_cases,
+  population,
+  (total_cases/population)*100 AS CasesPercentage
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+ORDER BY
+  1,
+  2
+
+
+## Looking at Countries with Highest Infection Rate compared to Population
+
+
+SELECT
+  location,
+  population,
+  MAX(total_cases) AS HighestInfectionCount,
+  MAX((total_cases/population)*100) AS PercentPopulationInfected
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+GROUP BY
+  location,
+  population
+ORDER BY
+  PercentPopulationInfected DESC
+
+
+## Show Countries with Highest Death Count per Population
+
+
+SELECT
+  location,
+  MAX(total_deaths) AS TotalDeathCount
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+GROUP BY
+  location
+ORDER BY
+  TotalDeathCount DESC
+
+
+  ## Breaking by Continent
+  -- Showing continent with the Highest death count per population
+
+
+SELECT
+  continent,
+  MAX(total_deaths) AS TotalDeathCount
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+GROUP BY
+  continent
+ORDER BY
+  TotalDeathCount DESC
+
+
+## Breaking to Global Numbers
+
+
+SELECT
+  date,
+  SUM(new_cases) AS total_cases,
+  SUM(new_deaths) AS total_deaths,
+  (SUM(new_deaths)/SUM(new_cases))*100 AS GlobalDeathPercentage
+FROM
+  `portfol-1-378507.Covid.Covid_deaths`
+WHERE
+  continent IS NOT NULL
+GROUP BY
+  date
+ORDER BY
+  1,
+  2
+
+
+##Joining Covid_Death and Covid_Vaccination
+
+
+SELECT
+  *
+FROM
+  `portfol-1-378507.Covid.Covid_deaths` AS Death
+JOIN
+  `portfol-1-378507.Covid.Covid_vaccination` AS Vaccination
+ON
+  Death.location = Vaccination.location
+  AND Death.date = Vaccination.date
+
+
+## Looking at Total Population vs Vaccination
+
+
+SELECT
+  Death.continent,
+  Death.location,
+  Death.date,
+  Death.population,
+  Vaccination.new_vaccinations,
+  SUM(Vaccination.new_vaccinations) OVER (PARTITION BY Death.location ORDER BY Death.location, Death.date) AS RollingPeopleVaccinated
+FROM
+ `portfol-1-378507.Covid.Covid_deaths` AS Death
+JOIN
+  `portfol-1-378507.Covid.Covid_vaccination` AS Vaccination
+ON
+  Death.location = Vaccination.location
+  AND Death.date = Vaccination.date
+WHERE
+  Death.continent IS NOT NULL
+ORDER BY
+  2,
+  3
+
+  ## Using CTE For RollingPeopleVaccinated vs Population
+
+WITH
+  PopvsVac_CTE AS (
+  SELECT
+    Death.continent,
+    Death.location,
+    Death.date,
+    Death.population,
+    Vaccination.new_vaccinations,
+    SUM(Vaccination.new_vaccinations) OVER (PARTITION BY Death.location ORDER BY Death.location, Death.date) AS RollingPeopleVaccinated
+  FROM
+    `portfol-1-378507.Covid.Covid_deaths` AS Death
+  JOIN
+    `portfol-1-378507.Covid.Covid_vaccination` AS Vaccination
+  ON
+    Death.location = Vaccination.location
+    AND Death.date = Vaccination.date
+  WHERE
+    Death.continent IS NOT NULL)
+SELECT
+  *,
+  (RollingPeopleVaccinated/population)*100
+FROM
+  PopvsVac_CTE
+
+ ## Using Temp Table to perform Calculation on Partition By in previous query
+
+DROP Table if exists Covid.PercentPopulationVaccinated
+Create Table Covid.PercentPopulationVaccinated
+(
+Continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+New_vaccinations numeric,
+RollingPeopleVaccinated numeric
+)
+
+Insert into Covid.PercentPopulationVaccinate
+(
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(CONVERT(int,vac.new_vaccinations)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as RollingPeopleVaccinated
+
+From  `portfol-1-378507.Covid.Covid_deaths` AS dea
+Join `portfol-1-378507.Covid.Covid_vaccination` AS  vac
+	On dea.location = vac.location
+	and dea.date = vac.date
+  )
+
+Select *, (RollingPeopleVaccinated/Population)*100
+From Covid.PercentPopulationVaccinated
+
+
+## Creating View to store data for later visualizations
+
+Create View Covid.PercentPopulationVaccinated as
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+ ,SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location, dea.date) as RollingPeopleVaccinated
+From  `portfol-1-378507.Covid.Covid_deaths` AS dea
+Join `portfol-1-378507.Covid.Covid_vaccination` AS vac
+	On dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null 
