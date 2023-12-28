@@ -1,0 +1,257 @@
+/*
+Walmart_sales Data Exploration 
+
+*/
+
+CREATE TABLE Walmart_Sales_Data
+(Invoice_ID VARCHAR,
+ Branch VARCHAR,
+ City VARCHAR,
+ Customer_type VARCHAR,
+ Gender VARCHAR,
+ Product_line VARCHAR,
+ Unit_price FLOAT,
+ Quantity INT,
+ Tax_5_Percent	FLOAT,
+ Total FLOAT,
+ Date DATE,
+ Time TIME,
+ Payment VARCHAR,
+ cogs FLOAT,
+ gross_margin_percentage FLOAT,
+ gross_income FLOAT,
+ Rating FLOAT);
+ 
+ SELECT*
+ FROM walmart_sales_data;
+ 
+ SELECT Time,(CASE WHEN time BETWEEN '00:00:00' AND '12:00:00' THEN 'Morning'
+			  WHEN time BETWEEN '12:01:00' AND '16:00:00' THEN 'Afternoon'
+			  ELSE 'Evening' END )AS time_of_date
+FROM walmart_sales_data;
+
+ 
+ALTER TABLE walmart_sales_data ADD COLUMN time_of_day VARCHAR;
+
+UPDATE walmart_sales_data
+SET time_of_day = ( CASE WHEN time BETWEEN '00:00:00' AND '12:00:00' THEN 'Morning'
+			  WHEN time BETWEEN '12:01:00' AND '16:00:00' THEN 'Afternoon'
+			  ELSE 'Evening' END);
+
+SELECT date,to_char(date,'Day') as day
+FROM walmart_sales_data;
+
+ALTER TABLE walmart_sales_data ADD COLUMN day_name VARCHAR;
+
+UPDATE walmart_sales_data
+SET day_name = ( to_char(date,'Day'))
+
+SELECT date,to_char(date,'Month') as month
+FROM walmart_sales_data;
+
+ALTER TABLE walmart_sales_data ADD COLUMN month_name VARCHAR;
+
+UPDATE walmart_sales_data
+SET month_name = ( to_char(date,'Month'));
+
+SELECT*
+FROM walmart_sales_data;
+
+-- How many unique cities does the data have?
+
+SELECT COUNT(DISTINCT city) as no_of_city
+FROM walmart_sales_data;
+
+-- In which city is each branch?
+
+SELECT DISTINCT city,branch
+FROM walmart_sales_data;
+
+-- How many unique product lines does the data have?
+
+SELECT DISTINCT product_line
+FROM walmart_sales_data;
+
+-- What is the most common payment method?
+
+SELECT Payment,COUNT(payment) as no_of_payment
+FROM walmart_sales_data
+GROUP BY Payment
+ORDER BY no_of_payment DESC;
+
+-- What is the most selling product line?
+
+SELECT product_line,COUNT(product_line) as no_of_line
+FROM walmart_sales_data
+GROUP BY product_line
+ORDER BY no_of_line DESC;
+
+-- What is the total revenue by month?
+
+SELECT month_name,SUM(total) as total_revenue
+FROM walmart_sales_data
+GROUP BY month_name;
+
+-- What month had the largest COGS?
+
+SELECT month_name,SUM(cogs) as largest_cogs
+FROM walmart_sales_data
+GROUP BY month_name
+ORDER BY largest_cogs DESC
+LIMIT 1;
+
+-- What product line had the largest revenue?
+
+SELECT product_line,SUM(total) as largest_revenue
+FROM walmart_sales_data
+GROUP BY product_line
+ORDER BY largest_revenue DESC
+LIMIT 1;
+
+-- What is the city with the largest revenue?
+
+SELECT city,SUM(total) as total_revenue
+FROM walmart_sales_data
+GROUP BY city
+ORDER BY total_revenue DESC
+LIMIT 1;
+
+-- What product line had the largest VAT?
+
+SELECT product_line,AVG(tax_5_percent) as AVG_VAT
+FROM walmart_sales_data
+GROUP BY product_line
+ORDER BY AVG_VAT DESC
+LIMIT 1;
+
+-- Fetch each product line and add a column to those product line showing "Good", "Bad". Good if its greater than average sales
+
+SELECT product_line,(CASE WHEN quantity > avg(quantity) THEN 'Good'
+					ELSE 'Bad'
+					END) as sales_category
+FROM walmart_sales_data
+GROUP BY product_line,quantity;
+
+-- Which branch sold more products than average product sold?
+
+SELECT branch,SUM(quantity) as qty
+FROM walmart_sales_data
+GROUP BY branch
+HAVING SUM(quantity) > (SELECT avg(quantity) 
+                        FROM walmart_sales_data)
+;
+
+-- What is the most common product line by gender?
+
+SELECT product_line,gender,COUNT(gender) as total_gender
+FROM walmart_sales_data
+GROUP BY product_line,gender
+ORDER BY total_gender DESC;
+
+-- What is the average rating of each product line?
+
+SELECT product_line,avg(rating) as avg_rating
+FROM walmart_sales_data
+GROUP BY product_line;
+
+-- Number of sales made in each time of the day per weekday?
+
+SELECT day_name,time_of_day,COUNT(*) as total_sales
+FROM walmart_sales_data
+GROUP BY day_name,time_of_day
+ORDER BY total_sales DESC;
+
+SELECT*
+FROM walmart_sales_data;
+
+-- Which of the customer types brings the most revenue?
+
+SELECT customer_type, SUM(total) as most_revenue
+FROM walmart_sales_data
+GROUP BY customer_type
+ORDER BY most_revenue DESC
+LIMIT 1;
+
+-- Which city has the largest tax percent/ VAT (Value Added Tax)?
+
+SELECT city,avg(tax_5_percent) as largest_tax
+FROM walmart_sales_data
+GROUP BY city
+ORDER BY largest_tax DESC
+LIMIT 1;
+
+-- Which customer type pays the most in VAT?
+
+SELECT customer_type, AVG(tax_5_percent) as largest_tax
+FROM walmart_sales_data
+GROUP BY customer_type
+ORDER BY largest_tax DESC
+LIMIT 1;
+
+-- How many unique customer types does the data have?
+
+SELECT DISTINCT customer_type
+FROM walmart_sales_data;
+
+-- How many unique payment methods does the data have?
+
+SELECT distinct payment
+FROM walmart_sales_data;
+
+-- What is the most common customer type?
+
+SELECT customer_type,COUNT(customer_type) as no_of_customer
+FROM walmart_sales_data
+GROUP BY customer_type
+ORDER BY no_of_customer DESC;
+
+-- Which customer type buys the most?
+
+SELECT customer_type,COUNT(quantity) as total_quantity
+FROM walmart_sales_data
+GROUP BY customer_type
+ORDER BY total_quantity DESC
+LIMIT 1;
+
+-- What is the gender of most of the customers?
+
+SELECT gender, COUNT(*) as no_customer
+FROM walmart_sales_data
+GROUP BY gender
+ORDER BY no_customer DESC;
+
+-- What is the gender distribution per branch?
+
+SELECT branch,gender,COUNT(gender) as no_of_gender
+FROM walmart_sales_data
+GROUP BY branch,gender
+ORDER BY no_of_gender DESC;
+
+-- Which time of the day do customers give most ratings?
+ 
+SELECT time_of_day,AVG(rating) as no_of_rating
+FROM walmart_sales_data
+GROUP BY time_of_day
+ORDER BY no_of_rating DESC;
+
+-- Which time of the day do customers give most ratings per branch?
+
+SELECT branch,time_of_day,AVG(rating) as avg_rating
+FROM walmart_sales_data
+GROUP BY branch,time_of_day
+ORDER BY avg_rating DESC;
+ 
+-- Which day of the week has the best avg ratings?
+
+SELECT day_name,AVG(rating) as day_rating
+FROM walmart_sales_data
+GROUP BY day_name
+ORDER BY day_rating DESC; 
+
+-- Which day of the week has the best average ratings per branch?
+
+SELECT branch,day_name,AVG(rating) as day_rating
+FROM walmart_sales_data
+GROUP BY branch,day_name
+ORDER BY day_rating DESC;
+
