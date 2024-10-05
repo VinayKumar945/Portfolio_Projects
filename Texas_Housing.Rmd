@@ -1,0 +1,200 @@
+---
+title: "Texas_Housing"
+author: "Vinay_kumar"
+date: "2024-10-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+install.packages("broom")
+install.packages("sigr")
+install.packages("zoo")
+install.packages("ggplot2")
+install.packages("vtreat")
+install.packages("WVPlots")
+install.packages("randomForest")
+
+library(tidyverse)
+library(ggplot2)
+library(zoo)
+library(broom)
+library(sigr)
+library(vtreat)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(caret)
+set.seed(102)
+
+## Loading the dataset 
+house_data <- read.csv("/Users/vinay/Downloads/house_data2.csv", stringsAsFactors = FALSE)  
+
+## Filtering the data for Texas state only
+data_texas <- house_data[house_data$state == "Texas", ]
+
+
+## Looking the data to see if everthing is loaded right 
+str(data_texas)
+head(data_texas)
+tail(data_texas)
+
+
+## Summary statistics
+summary(data_texas)
+
+## Checking for missing values
+sum(is.na(data_texas))
+## Cleaning the data to omit Null Values and using cleaned data
+cleaned_data <- na.omit(data_texas)
+nrow(cleaned_data)
+house_data <- cleaned_data
+
+## Looking how data looks like after cleaning
+View(house_data)
+
+#####################3##########################
+## CITY-WISE DETAILS
+bedcount <- house_data %>% 
+  group_by(city) %>% 
+  summarise(Avg_Bedrooms = mean(bed)) %>% 
+  mutate(Avg_Bedrooms = round(Avg_Bedrooms))
+
+## Number of Properties
+property_by_City <- house_data %>%
+  count(city) %>%
+  rename(city = city, Property_Count = n) 
+
+result_df <- left_join(property_by_City, bedcount, by = "city")
+
+## Number of Bathrooms
+avg_df <- house_data %>%
+  group_by(city) %>%
+  summarise(Avg_bathrooms = round(mean(bath)),
+            Avg_Price = mean(price)) 
+
+result_df_city <- left_join(result_df, avg_df, by = "city")
+
+## Status Count
+sorted_result_df_city <- result_df_city %>% 
+  arrange(desc(Property_Count), desc(Avg_Bedrooms), desc(Avg_bathrooms), desc(Avg_Price))
+head(sorted_result_df_city, 10)
+
+ggplot()
+
+## Show 'bed' values from 1.0 to 10.0
+ggplot(house_data, aes(x = factor(bed), fill = factor(bed))) +
+  geom_bar() +
+  ggtitle("Number of Bedrooms") +
+  xlab("Bedrooms") +
+  ylab("Count") +
+  scale_x_discrete(labels = as.character(1:10)) +
+  scale_fill_discrete(name = "Bedrooms") +
+  theme_minimal()
+
+## Show 'bath' values from 1.0 to 10.0
+ggplot(house_data, aes(x = factor(bath),fill = factor(bath))) +
+  geom_bar() +
+  ggtitle("Number of Bathrooms") +
+  xlab("Bathrooms") +
+  ylab("Count") +
+  scale_x_discrete(labels = as.character(1:10)) +
+  scale_fill_discrete(name = "Bathrooms") +
+  theme_minimal()
+
+
+## Number of cities in Texas
+num_cities <- house_data %>% distinct(city) %>% nrow()
+
+cat("Number of cities:", num_cities, "\n")
+
+## Using linear regression model with dependent variable "price"
+house_data$house_size2 <- house_data$house_size^2
+model <- lm(price ~  bed + bath + house_size+ acre_lot + house_size2, data = house_data)
+
+## Looking AIC and BIC for the model
+glance(model)
+
+## Summary of the model
+summary(model)
+
+## Predicting Price for the model
+house_data$predict_price <- predict(model)
+
+## Finding out correlation between "price" and "Predicted Price" 
+correlation_result <- cor.test(house_data$price,house_data$predict_price)
+correlation_result
+
+## Plotting data of Price vs. Predicted Price
+ggplot(data = house_data ,aes(x= predict_price,y=price))+geom_jitter(width=0, height=0.05, alpha = .5)+geom_smooth(method="lm", se=FALSE)+ggtitle("Where are we relative to the 45 degree line?")
+
+## Let's see how we do "out of sample" in a test/train scenario
+## I will randomly split the sample 70/30
+train_size<-0.7*nrow(house_data)
+## now I will randomly pick 70% of the observations to go into my training 
+train_rows<-sample(nrow(house_data),train_size)
+## Now splitting data and naming them house_train and house_test
+house_train<-house_data[train_rows,2:12]
+house_test<-house_data[-train_rows,2:12]
+
+## Fit a linear regression model on the training data
+reg_train0 <- lm(price ~ bed + bath + house_size + acre_lot + house_size2, data = house_train)
+## predicting test sample price from training regression
+test_predictions <- predict(reg_train0,house_test)
+
+summary(reg_train0)
+summary(test_predictions)
+# Residual plot
+plot(reg_train0, which = 1)
+
+# Assume having vectors 'predicted' and 'actual' containing predicted and actual values
+rmse <- sqrt(mean((house_test$price - test_predictions)^2)) 
+print(paste("RMSE:", rmse))
+
+# Print the model summary
+summary(reg_train0)
+
+
+
+# Define the training control with k-fold cross-validation ,the number is 5 Fold 
+train_control <- trainControl(method = "cv",  
+                              number = 5)    
+
+
+# Training model using the train function along with the train control
+secondmodel1 <- train(price ~ bed + bath + house_size + acre_lot + house_size2,              # Formula defining the model
+               data = house_test,    # Training dataset
+               method = "lm",           # Model algorithm (e.g., linear regression)
+               trControl = train_control)  # Specify the training control
+
+
+
+# Evaluate the model performance
+# Extracting  performance metric from each fold
+performance <- secondmodel1$resample
+
+# Calculate mean performance metric
+mean_performance <- mean(performance$RMSE)  # Example: RMSE as the performance metric
+
+# Assess variability
+performance_sd <- sd(performance$RMSE)  # Standard deviation of RMSE across folds
+
+# Display mean performance and variability
+cat("Mean RMSE:", mean_performance, "\n")
+cat("Standard Deviation of RMSE:", performance_sd, "\n")
+
+
+## Using Random Forest regression for ntrees = 500
+rf_model <- randomForest(price ~ bed + bath + house_size + acre_lot + house_size2, data = house_train, ntree = 500)
+summary(rf_model)
+
+# Variable Importance plot helps to see how important the variables in the model
+varImpPlot(rf_model)
+
+
+# Assessing model performance
+rf_predictions <- predict(rf_model, house_test)  # Make predictions on the test data
+rf_rmse <- sqrt(mean((house_test$price - rf_predictions)^2))  # Calculate RMSE
+print(paste("Random Forest RMSE:", rf_rmse))
+
+```
+
